@@ -35,6 +35,7 @@ for _sub in (
     os.path.join("feature_extractor", "BLFCP_specials"),
     os.path.join("feature_extractor", "SOTA_specials"),
     os.path.join("feature_extractor", "AFRL_specials"),
+    os.path.join("feature_extractor", "EnCoD_specials"),
     "combine_csv",
 ):
     sys.path.append(resource_path(_sub))
@@ -61,6 +62,10 @@ from SOTA_fspecials import (
     SOTA_test,
 )
 from AFRL_fspecials import local_nibble_variance, AFRL_test
+from EnCoD_fspecials import (
+    ENCOD_ARCHITECTURES, train_encod_model, load_encod_model,
+    inspect_encod_model_summary, predict_encod_batch,
+)
 from combine import concatenate_rows_gui, concatenate_columns_gui
 
 
@@ -770,11 +775,13 @@ def show_guidance_modal():
         "   for training ML/DL classifiers. All suites adapt automatically to any fragment length.",
         "",
         "3. Detection Methods (Direct Binary Classification: 1 = Encrypted, 0 = Unencrypted):",
-        "   Run direct threshold/ensemble encryption detectors directly on fragment CSVs:",
+        "   Run statistical or learned encryption detectors directly on fragment CSVs:",
         "   • AFRL Detector: Combines NIST Approximate Entropy, Block Frequency, Runs Test,",
         "     and Local Nibble Variance (LNV <= 46.98 on 64-byte sliding windows).",
         "   • HEDGE Detector: Combines NIST Approximate Entropy, Block Frequency, Cumulative Sums,",
         "     Chi-Square Absolute Band (gamma=2), and Chi-Square Confidence (0.01 <= p <= 0.99).",
+        "   • EnCoD Neural Network: Supply Unencrypted (0) and Encrypted (1) training CSVs to",
+        "     train a byte-histogram MLP (SELU/ReLU + MinMax [0,2]) and predict target CSVs.",
         "   • Output CSV contains 1 (Encrypted) or 0 (Unencrypted) per fragment row.",
         "",
         "4. Combine Datasets:",
@@ -836,7 +843,7 @@ def show_about_modal():
     win.close()
 
 
-def create_progress_modal(title, subtitle):
+def create_progress_modal(title, subtitle, auto_start: bool = False):
     reg = {}
     layout = [
         [psg.Column([
@@ -844,12 +851,12 @@ def create_progress_modal(title, subtitle):
             [psg.Text(subtitle, font=FONT_SUBTITLE, text_color=TEXT_MUTED, background_color=BG_CARD)],
             [psg.HorizontalSeparator(color=BORDER_CARD)],
             [psg.Text("Status:", font=FONT_BOLD, background_color=BG_CARD, text_color=TEXT_MUTED),
-             psg.Text("Ready to start", key='-STATUS-', font=FONT_BOLD, background_color=BG_CARD, text_color=TEXT_PRIMARY, size=(42, 1))],
-            [psg.ProgressBar(100, orientation='h', size=(48, 22), key='-PROGRESS-')],
+             psg.Text("Initializing..." if auto_start else "Ready to start", key='-STATUS-', font=FONT_BOLD, background_color=BG_CARD, text_color=TEXT_PRIMARY, size=(52, 1))],
+            [psg.ProgressBar(100, orientation='h', size=(54, 22), key='-PROGRESS-')],
             [psg.Text("Elapsed: 00:00:00  |  ETR: --:--:--", key='-TIME-', font=FONT_MONO, background_color=BG_CARD, text_color=ACCENT_AMBER)],
             [psg.Push(background_color=BG_CARD),
-             make_glass_btn(reg, "Start", "Start Execution", 170, 38, palette="emerald", parent_bg=BG_CARD, icon="play", pad=(6, 10)),
-             make_glass_btn(reg, "-CNL-", "Cancel", 130, 38, palette="ruby", parent_bg=BG_CARD, icon="close", disabled=True, pad=(6, 10)),
+             make_glass_btn(reg, "Start", "Start Execution", 170, 38, palette="emerald", parent_bg=BG_CARD, icon="play", disabled=auto_start, pad=(6, 10)),
+             make_glass_btn(reg, "-CNL-", "Cancel", 130, 38, palette="ruby", parent_bg=BG_CARD, icon="close", disabled=(not auto_start), pad=(6, 10)),
              psg.Push(background_color=BG_CARD)]
         ], key="-CARD-PROG-", background_color=BG_CARD, pad=(18, 18), expand_x=True)]
     ]
@@ -1097,30 +1104,34 @@ DETECTION_METHODS_REGISTRY = {
     "AFRL": {
         "name": "AFRL Lightweight Statistical Framework (AET + FWT + RT + LNV)",
         "func": AFRL_test,
+        "requires_model": False,
         "header": "AFRL_encrypted",
         "description": (
-            "AFRL Framework (Hosseinabadi & Teimouri, University of Tehran):\n"
-            "Training-free real-time detector combining 4 complementary statistical tests:\n"
-            "  1) AET (Approximate Entropy Test, NIST SP 800-22, p >= 0.01)\n"
-            "  2) FWT (Frequency Test within a Block, NIST SP 800-22, p >= 0.01)\n"
-            "  3) RT  (Runs Test, NIST SP 800-22, p >= 0.01)\n"
-            "  4) LNV (Local Nibble Variance <= 46.98; window l=64B, overlap s=32B)\n"
-            "Data Type: Strictly processed as unsigned 8-bit integers (uint8, values 0..255).\n"
-            "Output: 1 = Encrypted fragment (all 4 pass), 0 = Unencrypted fragment."
+            "AFRL Framework (Hosseinabadi & Teimouri, University of Tehran) — Training-Free:\n"
+            "  • Combines NIST AET (p >= 0.01), FWT (p >= 0.01), RT (p >= 0.01), and LNV (<= 46.98, l=64B, s=32B).\n"
+            "  • Strictly processes unsigned 8-bit bytes (0..255). Output: 1 = Encrypted, 0 = Unencrypted."
         ),
     },
     "HEDGE": {
         "name": "HEDGE Ensemble Detector (AppEn + BlockFreq + Cusum + Chi2 Abs & Conf)",
         "func": HEDGE_test,
+        "requires_model": False,
         "header": "HEDGE_encrypted",
         "description": (
-            "HEDGE Method: Evaluates each byte fragment across 5 statistical uniformity criteria:\n"
-            "  1) NIST Approximate Entropy Test (p >= 0.01)\n"
-            "  2) NIST Frequency Within Block Test (p >= 0.01)\n"
-            "  3) NIST Cumulative Sums (Forward & Backward) Test (p >= 0.01)\n"
-            "  4) Chi-Square Uniformity Absolute Band (mu +/- 2*sigma, adaptive to fragment length L)\n"
-            "  5) Chi-Square Uniformity Confidence Interval (0.01 <= p-value <= 0.99)\n"
-            "Output: 1 = Encrypted fragment (passes all 5 checks), 0 = Unencrypted fragment."
+            "HEDGE Method — Training-Free Statistical Ensemble:\n"
+            "  • Evaluates NIST AET, FWT, Cumulative Sums (p >= 0.01), Chi2 Band (mu +/- 2*sigma), and Chi2 p-val [0.01, 0.99].\n"
+            "  • Adaptive to fragment length L. Output: 1 = Encrypted (passes all 5 checks), 0 = Unencrypted."
+        ),
+    },
+    "EnCoD": {
+        "name": "EnCoD Neural Network (Byte-Histogram MLP Classifier)",
+        "func": None,
+        "requires_model": True,
+        "header": "EnCoD_encrypted",
+        "description": (
+            "EnCoD Classifier (De Gaspari et al.) — Train on Unencrypted (0) & Encrypted (1) CSVs, then Predict:\n"
+            "  • Extracts 256-bin byte probability histograms with MinMax [0, 2] scaling and trains a SELU/ReLU MLP.\n"
+            "  • Click 'Train Model...' below (or load a saved .npz model) before predicting -> 1 = Encrypted, 0 = Unencrypted."
         ),
     },
 }
@@ -1130,29 +1141,31 @@ def detect_row_dispatch(row, method_key: str) -> int:
     return int(DETECTION_METHODS_REGISTRY[method_key]["func"](row))
 
 
-def parallel_detection_large_file(window, input_file_path, output_file_path, method_key, cpu_percent, include_header, cancel_event, chunk_size=400):
+def parallel_detection_large_file(window, input_file_path, output_file_path, method_key, cpu_percent, include_header, cancel_event, chunk_size=400, model_path=""):
     try:
-        num_cores = max(1, int(mp.cpu_count() * cpu_percent / 100))
+        method_info = DETECTION_METHODS_REGISTRY[method_key]
+        requires_model = bool(method_info.get("requires_model", False))
+        eff_chunk_size = 1000 if requires_model else chunk_size
+
         window.write_event_value('-THREAD-UPDATE-', (0, 100, 'Stage 1/2: Counting fragments...', 'Calculating...'))
         row_count = _fast_count_lines(input_file_path)
-        total_chunks = max(1, ceil(row_count / chunk_size))
+        total_chunks = max(1, ceil(row_count / eff_chunk_size))
         if cancel_event.is_set():
             window.write_event_value('-THREAD-DONE-', (False, "Cancelled by user."))
             return
 
-        window.write_event_value('-THREAD-UPDATE-', (0, total_chunks, f'Stage 2/2: Running {method_key} across {num_cores} CPU cores...', 'Starting...'))
+        col_header = [method_info["header"]]
         start_time = time.time()
         is_first_chunk, total_processed, encrypted_count = True, 0, 0
-        col_header = [DETECTION_METHODS_REGISTRY[method_key]["header"]]
-        worker_fn = partial(detect_row_dispatch, method_key=method_key)
-        mp_subchunk = max(1, chunk_size // (num_cores * 2))
 
-        with mp.Pool(processes=num_cores) as pool:
-            for i, uint8_block in enumerate(_iter_uint8_fragment_chunks(input_file_path, chunk_size)):
+        if requires_model:
+            encod_model = load_encod_model(model_path)
+            window.write_event_value('-THREAD-UPDATE-', (0, total_chunks, f'Stage 2/2: Predicting with EnCoD ({encod_model["arch"]})...', 'Starting...'))
+            for i, uint8_block in enumerate(_iter_uint8_fragment_chunks(input_file_path, eff_chunk_size)):
                 if cancel_event.is_set():
                     window.write_event_value('-THREAD-DONE-', (False, "Detection stopped by user."))
                     return
-                preds_arr = np.asarray(pool.map(worker_fn, uint8_block, chunksize=mp_subchunk), dtype=np.uint8)
+                preds_arr = predict_encod_batch(uint8_block, encod_model)
                 total_processed += preds_arr.size
                 encrypted_count += int(np.sum(preds_arr))
                 pd.DataFrame(preds_arr).to_csv(
@@ -1166,6 +1179,31 @@ def parallel_detection_large_file(window, input_file_path, output_file_path, met
                 pct = min(1.0, cw / total_chunks)
                 etr = (elapsed / pct) - elapsed if pct > 0 else 0
                 window.write_event_value('-THREAD-UPDATE-', (cw, total_chunks, f'Classified chunk {cw} of {total_chunks} ({int(pct * 100)}%)', f"Elapsed: {format_time(elapsed)} | ETR: {format_time(etr)}"))
+        else:
+            num_cores = max(1, int(mp.cpu_count() * cpu_percent / 100))
+            window.write_event_value('-THREAD-UPDATE-', (0, total_chunks, f'Stage 2/2: Running {method_key} across {num_cores} CPU cores...', 'Starting...'))
+            worker_fn = partial(detect_row_dispatch, method_key=method_key)
+            mp_subchunk = max(1, eff_chunk_size // (num_cores * 2))
+
+            with mp.Pool(processes=num_cores) as pool:
+                for i, uint8_block in enumerate(_iter_uint8_fragment_chunks(input_file_path, eff_chunk_size)):
+                    if cancel_event.is_set():
+                        window.write_event_value('-THREAD-DONE-', (False, "Detection stopped by user."))
+                        return
+                    preds_arr = np.asarray(pool.map(worker_fn, uint8_block, chunksize=mp_subchunk), dtype=np.uint8)
+                    total_processed += preds_arr.size
+                    encrypted_count += int(np.sum(preds_arr))
+                    pd.DataFrame(preds_arr).to_csv(
+                        output_file_path, index=False,
+                        mode='w' if is_first_chunk else 'a',
+                        header=col_header if (is_first_chunk and include_header) else False,
+                    )
+                    is_first_chunk = False
+                    cw = i + 1
+                    elapsed = time.time() - start_time
+                    pct = min(1.0, cw / total_chunks)
+                    etr = (elapsed / pct) - elapsed if pct > 0 else 0
+                    window.write_event_value('-THREAD-UPDATE-', (cw, total_chunks, f'Classified chunk {cw} of {total_chunks} ({int(pct * 100)}%)', f"Elapsed: {format_time(elapsed)} | ETR: {format_time(etr)}"))
 
         unenc = total_processed - encrypted_count
         enc_pct = (100.0 * encrypted_count / total_processed) if total_processed else 0.0
@@ -1178,6 +1216,60 @@ def parallel_detection_large_file(window, input_file_path, output_file_path, met
             f"Saved predictions to:\n{output_file_path}"
         )
         window.write_event_value('-THREAD-DONE-', (True, summary))
+    except Exception as e:
+        window.write_event_value('-THREAD-ERROR-', str(e))
+
+
+def parallel_encod_training_worker(window, train_cfg: dict, cancel_event):
+    try:
+        res = train_encod_model(
+            unenc_train_csv=train_cfg["unenc_train"],
+            enc_train_csv=train_cfg["enc_train"],
+            save_model_path=train_cfg["model_out"],
+            test_unenc_csv=train_cfg.get("unenc_test", ""),
+            test_enc_csv=train_cfg.get("enc_test", ""),
+            arch_name=train_cfg["arch"],
+            scaler_mode=train_cfg["scaler"],
+            epochs=train_cfg["epochs"],
+            batch_size=train_cfg["batch_size"],
+            learning_rate=train_cfg["lr"],
+            val_ratio=train_cfg["val_ratio"],
+            early_stop_patience=train_cfg["patience"],
+            cancel_event=cancel_event,
+            status_cb=lambda c, m, st, ts: window.write_event_value('-THREAD-UPDATE-', (c, m, st, ts)),
+        )
+        if res.get("cancelled"):
+            window.write_event_value('-THREAD-DONE-', (False, {"message": "EnCoD training cancelled by user."}))
+            return
+
+        vm = res["val_metrics"]
+        lines = [
+            f"Architecture: {res['arch']}  |  Scaler: {res['scaler_mode']}",
+            f"Fragment Length: {res['fragment_length']} bytes",
+            f"Samples: Train={res['train_samples']} | Val={res['val_samples']}" + (f" | Test={res['test_samples']}" if res["test_samples"] else ""),
+            "",
+            f"Best Validation Metrics:",
+            f"  • Accuracy:  {vm['accuracy'] * 100:.2f}%",
+            f"  • Precision: {vm['precision'] * 100:.2f}%",
+            f"  • Recall:    {vm['recall'] * 100:.2f}%",
+            f"  • F1-Score:  {vm['f1'] * 100:.2f}%",
+        ]
+        if res.get("test_metrics") is not None:
+            tm = res["test_metrics"]
+            lines.extend([
+                "",
+                f"Test Evaluation Metrics:",
+                f"  • Accuracy:  {tm['accuracy'] * 100:.2f}%",
+                f"  • Precision: {tm['precision'] * 100:.2f}%",
+                f"  • Recall:    {tm['recall'] * 100:.2f}%",
+                f"  • F1-Score:  {tm['f1'] * 100:.2f}%",
+            ])
+        lines.extend([
+            "",
+            f"Saved Model (.npz):\n{res['model_path']}",
+            f"Total Time: {format_time(res['total_seconds'])}",
+        ])
+        window.write_event_value('-THREAD-DONE-', (True, {"message": "\n".join(lines), "model_path": res["model_path"]}))
     except Exception as e:
         window.write_event_value('-THREAD-ERROR-', str(e))
 
@@ -1361,7 +1453,192 @@ def open_feature_extractor_studio(input_csv_path="", output_csv_path=""):
     win_prog.close()
 
 
-def run_detection_method_workflow(method_key, in_csv, out_csv, cpu_percent, include_header):
+def open_encod_training_studio(default_model_path: str = ""):
+    reg = {}
+    default_save = (
+        default_model_path.strip()
+        if default_model_path and default_model_path.strip()
+        else os.path.join(os.path.abspath("."), "models", "encod_model.npz")
+    )
+
+    train_files_frame = psg.Frame(' 1. Training Dataset CSVs (Required) ', [
+        [psg.Text("Unencrypted Train (0):", size=(20, 1), background_color=BG_CARD, font=FONT_BOLD),
+         psg.Input(key="-ENC-TR-UNENC-", readonly=True, disabled_readonly_background_color=BG_INPUT, disabled_readonly_text_color=TEXT_PRIMARY, expand_x=True),
+         make_glass_btn(reg, "-BRW-ENC-TR0-", "Browse CSV", 142, 34, palette="smoked", parent_bg=BG_CARD, radius=9, font_size=11, icon="folder", pad=(6, 3), btn_kind="file")],
+        [psg.Text("Encrypted Train (1):", size=(20, 1), background_color=BG_CARD, font=FONT_BOLD),
+         psg.Input(key="-ENC-TR-ENC-", readonly=True, disabled_readonly_background_color=BG_INPUT, disabled_readonly_text_color=TEXT_PRIMARY, expand_x=True),
+         make_glass_btn(reg, "-BRW-ENC-TR1-", "Browse CSV", 142, 34, palette="smoked", parent_bg=BG_CARD, radius=9, font_size=11, icon="folder", pad=(6, 3), btn_kind="file")],
+    ], background_color=BG_CARD, title_color=ACCENT_CYAN, font=FONT_SECTION, expand_x=True, pad=(5, 5), relief=psg.RELIEF_FLAT)
+
+    test_files_frame = psg.Frame(' 2. Optional Test CSVs (Leave Blank to Use Stratified Validation Split) ', [
+        [psg.Text("Unencrypted Test (0):", size=(20, 1), background_color=BG_CARD, font=FONT_BOLD),
+         psg.Input(key="-ENC-TE-UNENC-", readonly=True, disabled_readonly_background_color=BG_INPUT, disabled_readonly_text_color=TEXT_PRIMARY, expand_x=True),
+         make_glass_btn(reg, "-BRW-ENC-TE0-", "Browse CSV", 142, 34, palette="smoked", parent_bg=BG_CARD, radius=9, font_size=11, icon="folder", pad=(6, 3), btn_kind="file")],
+        [psg.Text("Encrypted Test (1):", size=(20, 1), background_color=BG_CARD, font=FONT_BOLD),
+         psg.Input(key="-ENC-TE-ENC-", readonly=True, disabled_readonly_background_color=BG_INPUT, disabled_readonly_text_color=TEXT_PRIMARY, expand_x=True),
+         make_glass_btn(reg, "-BRW-ENC-TE1-", "Browse CSV", 142, 34, palette="smoked", parent_bg=BG_CARD, radius=9, font_size=11, icon="folder", pad=(6, 3), btn_kind="file")],
+    ], background_color=BG_CARD, title_color=ACCENT_CYAN, font=FONT_SECTION, expand_x=True, pad=(5, 5), relief=psg.RELIEF_FLAT)
+
+    params_frame = psg.Frame(' 3. EnCoD Architecture, Scaling & Hyperparameters ', [
+        [psg.Radio(ENCOD_ARCHITECTURES["BinaryAll_SELU"]["label"], "ENC_ARCH", key="-ENC-ARCH-ALL-", default=True, background_color=BG_CARD, font=FONT_BOLD)],
+        [psg.Radio(ENCOD_ARCHITECTURES["BinarySingle_ReLU"]["label"], "ENC_ARCH", key="-ENC-ARCH-SINGLE-", default=False, background_color=BG_CARD, font=FONT_BOLD)],
+        [psg.HorizontalSeparator(color=BORDER_CARD)],
+        [psg.Radio("MinMaxScaler [0, 2] (Fit strictly on Train Split — Paper Sect. 4.5)", "ENC_SCALER", key="-ENC-SCL-MINMAX-", default=True, background_color=BG_CARD, font=FONT_BOLD)],
+        [psg.Radio("Fixed Scaling [0, 2] (2.0 × Byte PDF — Length-Invariant across fragment sizes)", "ENC_SCALER", key="-ENC-SCL-FIXED-", default=False, background_color=BG_CARD, font=FONT_BOLD)],
+        [
+            psg.Text("Epochs:", background_color=BG_CARD, font=FONT_BOLD, pad=((6, 2), (6, 4))),
+            psg.Input("60", key="-ENC-EPOCHS-", size=(6, 1)),
+            psg.Text("Batch:", background_color=BG_CARD, font=FONT_BOLD, pad=((12, 2), (6, 4))),
+            psg.Input("64", key="-ENC-BATCH-", size=(5, 1)),
+            psg.Text("LR:", background_color=BG_CARD, font=FONT_BOLD, pad=((12, 2), (6, 4))),
+            psg.Input("0.001", key="-ENC-LR-", size=(7, 1)),
+            psg.Text("Val Split:", background_color=BG_CARD, font=FONT_BOLD, pad=((12, 2), (6, 4))),
+            psg.Input("0.15", key="-ENC-VAL-", size=(5, 1)),
+            psg.Text("Patience:", background_color=BG_CARD, font=FONT_BOLD, pad=((12, 2), (6, 4))),
+            psg.Input("15", key="-ENC-PATIENCE-", size=(5, 1)),
+        ],
+    ], background_color=BG_CARD, title_color=ACCENT_CYAN, font=FONT_SECTION, expand_x=True, pad=(5, 5), relief=psg.RELIEF_FLAT)
+
+    out_frame = psg.Frame(' 4. Save Trained Model Bundle ', [
+        [psg.Text("Model Output (.npz):", size=(20, 1), background_color=BG_CARD, font=FONT_BOLD),
+         psg.Input(default_text=default_save, key="-ENC-MODEL-OUT-", readonly=True, disabled_readonly_background_color=BG_INPUT, disabled_readonly_text_color=TEXT_PRIMARY, expand_x=True),
+         make_glass_btn(reg, "-SAV-ENC-OUT-", "Save As .npz", 142, 34, palette="smoked", parent_bg=BG_CARD, radius=9, font_size=11, icon="save", pad=(6, 3), btn_kind="save", file_types=(("EnCoD NumPy Model", "*.npz"),))],
+    ], background_color=BG_CARD, title_color=ACCENT_CYAN, font=FONT_SECTION, expand_x=True, pad=(5, 5), relief=psg.RELIEF_FLAT)
+
+    layout = [
+        [psg.Text("EnCoD Neural Network — Training Studio", font=FONT_TITLE, text_color=ACCENT_CYAN), psg.Push(), psg.Text("● Supervised Byte-Histogram Trainer", font=FONT_BOLD, text_color=ACCENT_EMERALD)],
+        [train_files_frame],
+        [test_files_frame],
+        [params_frame],
+        [out_frame],
+        [psg.Push(),
+         make_glass_btn(reg, "-ENC-TRAIN-CANCEL-", "Cancel", 140, 40, palette="smoked", parent_bg=BG_MAIN, radius=10, font_size=12, icon="close", pad=(8, 6)),
+         make_glass_btn(reg, "-ENC-TRAIN-GO-", "Start EnCoD Training", 240, 40, palette="emerald", parent_bg=BG_MAIN, radius=10, font_size=12, icon="play", pad=(8, 6)),
+         psg.Push()],
+    ]
+
+    win_tr = psg.Window("EnCoD Training Studio", layout, resizable=True, modal=True, alpha_channel=0, finalize=True)
+    set_window_icon(win_tr)
+    finalize_sleek_window(win_tr, reg)
+
+    train_cfg = None
+    while True:
+        ev, vals = win_tr.read()
+        if ev in ("Exit", psg.WIN_CLOSED, "-ENC-TRAIN-CANCEL-"):
+            win_tr.close()
+            return None
+        if handle_glass_hover_event(win_tr, ev):
+            continue
+        if ev == "-ENC-TRAIN-GO-":
+            unenc_tr = vals.get("-ENC-TR-UNENC-", "").strip()
+            enc_tr = vals.get("-ENC-TR-ENC-", "").strip()
+            unenc_te = vals.get("-ENC-TE-UNENC-", "").strip()
+            enc_te = vals.get("-ENC-TE-ENC-", "").strip()
+            model_out = vals.get("-ENC-MODEL-OUT-", "").strip()
+
+            if not unenc_tr or not os.path.isfile(unenc_tr):
+                psg.popup_error("Please select a valid Unencrypted Training CSV file.", title="Input Required")
+                continue
+            if not enc_tr or not os.path.isfile(enc_tr):
+                psg.popup_error("Please select a valid Encrypted Training CSV file.", title="Input Required")
+                continue
+            if bool(unenc_te) != bool(enc_te):
+                psg.popup_error("Please select BOTH Unencrypted and Encrypted Test CSV files, or leave both empty.", title="Validation Error")
+                continue
+            if unenc_te and (not os.path.isfile(unenc_te) or not os.path.isfile(enc_te)):
+                psg.popup_error("One or both Test CSV paths are invalid.", title="Validation Error")
+                continue
+            if not model_out:
+                psg.popup_error("Please specify a destination path to save the trained EnCoD model (.npz).", title="Output Required")
+                continue
+            if not model_out.lower().endswith(".npz"):
+                model_out += ".npz"
+
+            try:
+                epochs = int(vals.get("-ENC-EPOCHS-", "60").strip())
+                batch_size = int(vals.get("-ENC-BATCH-", "64").strip())
+                lr = float(vals.get("-ENC-LR-", "0.001").strip())
+                val_ratio = float(vals.get("-ENC-VAL-", "0.15").strip())
+                patience = int(vals.get("-ENC-PATIENCE-", "15").strip())
+                if epochs < 1 or batch_size < 1 or patience < 0 or not (0.0 < lr <= 1.0) or not (0.01 <= val_ratio <= 0.90):
+                    raise ValueError
+            except ValueError:
+                psg.popup_error(
+                    "Invalid hyperparameters:\n"
+                    "• Epochs & Batch must be positive integers\n"
+                    "• Patience must be >= 0\n"
+                    "• LR must be in (0, 1]\n"
+                    "• Val Split must be in [0.01, 0.90]",
+                    title="Parameter Error",
+                )
+                continue
+
+            train_cfg = {
+                "unenc_train": unenc_tr,
+                "enc_train": enc_tr,
+                "unenc_test": unenc_te,
+                "enc_test": enc_te,
+                "model_out": model_out,
+                "arch": "BinaryAll_SELU" if vals.get("-ENC-ARCH-ALL-", True) else "BinarySingle_ReLU",
+                "scaler": "minmax" if vals.get("-ENC-SCL-MINMAX-", True) else "fixed",
+                "epochs": epochs,
+                "batch_size": batch_size,
+                "lr": lr,
+                "val_ratio": val_ratio,
+                "patience": patience,
+            }
+            win_tr.close()
+            break
+
+    win_prog = create_progress_modal(
+        "Training EnCoD Classifier",
+        f"Training {train_cfg['arch']} ({train_cfg['epochs']} epochs, scaler={train_cfg['scaler']})...",
+        auto_start=True,
+    )
+    cancel_event = threading.Event()
+    worker_thread = threading.Thread(
+        target=parallel_encod_training_worker,
+        args=(win_prog, train_cfg, cancel_event),
+        daemon=True,
+    )
+    worker_thread.start()
+
+    trained_model_path = None
+    while True:
+        event, prog_values = win_prog.read()
+        if event in ("Exit", psg.WIN_CLOSED):
+            if worker_thread.is_alive():
+                cancel_event.set()
+            break
+        if handle_glass_hover_event(win_prog, event):
+            continue
+        if event == '-CNL-':
+            win_prog['-STATUS-'].update("Stopping training safely...")
+            cancel_event.set()
+        elif event == '-THREAD-UPDATE-':
+            c, m, st, ts = prog_values[event]
+            win_prog['-PROGRESS-'].update(c, max=m)
+            win_prog['-STATUS-'].update(st)
+            win_prog['-TIME-'].update(ts)
+        elif event == '-THREAD-ERROR-':
+            psg.popup_error(f"An error occurred during EnCoD training:\n\n{prog_values[event]}", title="Training Error")
+            break
+        elif event == '-THREAD-DONE-':
+            ok, payload = prog_values[event]
+            msg = payload.get("message", "") if isinstance(payload, dict) else str(payload)
+            if ok and isinstance(payload, dict):
+                trained_model_path = payload.get("model_path")
+            psg.popup("EnCoD Training Complete!" if ok else "Cancelled", msg, title="Training Summary" if ok else "Stopped")
+            break
+    win_prog.close()
+    return trained_model_path
+
+
+def run_detection_method_workflow(method_key, in_csv, out_csv, cpu_percent, include_header, model_path=""):
+    if DETECTION_METHODS_REGISTRY[method_key].get("requires_model", False):
+        if not model_path or not os.path.isfile(model_path):
+            psg.popup_error("Please train an EnCoD model or select a valid saved model (.npz) first.", title="Model Required")
+            return
     if not in_csv or not os.path.isfile(in_csv):
         psg.popup_error("Please select a valid input fragments CSV file.", title="Validation Error")
         return
@@ -1386,7 +1663,12 @@ def run_detection_method_workflow(method_key, in_csv, out_csv, cpu_percent, incl
             set_glass_button_disabled(win_prog, "-CNL-", False)
             set_glass_button_disabled(win_prog, "Start", True)
             cancel_event.clear()
-            worker_thread = threading.Thread(target=parallel_detection_large_file, args=(win_prog, in_csv, out_csv, method_key, cpu_percent, include_header, cancel_event), daemon=True)
+            worker_thread = threading.Thread(
+                target=parallel_detection_large_file,
+                args=(win_prog, in_csv, out_csv, method_key, cpu_percent, include_header, cancel_event),
+                kwargs={"model_path": model_path},
+                daemon=True,
+            )
             worker_thread.start()
         elif event == '-CNL-':
             win_prog['-STATUS-'].update("Stopping detection workers...")
@@ -1515,15 +1797,27 @@ def build_main_window():
         [psg.VPush()]
     ]
 
-    # VIEW 3: ENCRYPTED FRAGMENT DETECTION METHODS (AFRL & HEDGE)
+    # VIEW 3: ENCRYPTED FRAGMENT DETECTION METHODS (AFRL, HEDGE & EnCoD)
+    encod_model_frame = psg.Frame(' EnCoD Model Setup (Train on Unenc/Enc CSVs or Load Saved .npz) ', [
+        [psg.Text("Model Status:", size=(16, 1), background_color=BG_CARD, font=FONT_BOLD),
+         psg.Text("No trained model loaded — click 'Train Model' or browse a .npz file", key="-DET-ENCOD-STATUS-", font=FONT_SUBTITLE, text_color=ACCENT_AMBER, background_color=BG_CARD, expand_x=True)],
+        [psg.Text("Model File (.npz):", size=(16, 1), background_color=BG_CARD, font=FONT_BOLD),
+         psg.Input(key="-DET-ENCOD-MODEL-", enable_events=True, readonly=True, disabled_readonly_background_color=BG_INPUT, disabled_readonly_text_color=TEXT_PRIMARY, expand_x=True),
+         make_glass_btn(reg, "-BRW-ENCOD-MODEL-", "Browse .npz", 128, 36, palette="smoked", parent_bg=BG_CARD, radius=9, font_size=11, icon="folder", pad=(4, 4), btn_kind="file", file_types=(("EnCoD Model", "*.npz *.pth"), ("All Files", "*.*"))),
+         make_glass_btn(reg, "-BTN-TRAIN-ENCOD-", "Train Model", 136, 36, palette="indigo", parent_bg=BG_CARD, radius=9, font_size=11, icon="bolt", pad=(4, 4))],
+    ], background_color=BG_CARD, title_color=ACCENT_CYAN, font=FONT_SECTION, expand_x=True, pad=(6, 4), relief=psg.RELIEF_FLAT)
+
     view_detect_layout = [
         [psg.Frame(' 1. Select Encrypted Fragment Detection Method ', [
             [psg.Radio("AFRL Framework — Local Nibble Variance (LNV) & NIST Statistical Fusion (1 = Encrypted, 0 = Unencrypted)",
                        "DETECT_METHOD", key="-DET-METHOD-AFRL-", default=True, enable_events=True, background_color=BG_CARD, font=FONT_BOLD)],
             [psg.Radio("HEDGE Detector — Chi-Square Absolute/Confidence Bands & NIST Ensemble (1 = Encrypted, 0 = Unencrypted)",
                        "DETECT_METHOD", key="-DET-METHOD-HEDGE-", default=False, enable_events=True, background_color=BG_CARD, font=FONT_BOLD)],
-            [psg.Text(DETECTION_METHODS_REGISTRY["AFRL"]["description"], key="-DET-METHOD-DESC-", font=FONT_SUBTITLE, text_color=TEXT_MUTED, background_color=BG_CARD, pad=((26, 6), (4, 6)))],
-        ], background_color=BG_CARD, title_color=ACCENT_CYAN, font=FONT_SECTION, expand_x=True, pad=(6, 6), relief=psg.RELIEF_FLAT)],
+            [psg.Radio("EnCoD Neural Network — Train on Unencrypted/Encrypted CSVs & Classify (1 = Encrypted, 0 = Unencrypted)",
+                       "DETECT_METHOD", key="-DET-METHOD-ENCOD-", default=False, enable_events=True, background_color=BG_CARD, font=FONT_BOLD)],
+            [psg.Text(DETECTION_METHODS_REGISTRY["AFRL"]["description"], key="-DET-METHOD-DESC-", font=FONT_SUBTITLE, text_color=TEXT_MUTED, background_color=BG_CARD, pad=((26, 6), (4, 4)))],
+        ], background_color=BG_CARD, title_color=ACCENT_CYAN, font=FONT_SECTION, expand_x=True, pad=(6, 4), relief=psg.RELIEF_FLAT)],
+        [psg.pin(psg.Column([[encod_model_frame]], key="-DET-ENCOD-WRAP-", visible=False, expand_x=True, pad=(0, 0)))],
         [psg.Frame(' 2. Input Fragments & Output Predictions CSV ', [
             [psg.Text("Fragments CSV:", size=(16, 1), background_color=BG_CARD, font=FONT_BOLD),
              psg.Input(key="-DET-IN-", readonly=True, disabled_readonly_background_color=BG_INPUT, disabled_readonly_text_color=TEXT_PRIMARY, expand_x=True),
@@ -1533,9 +1827,9 @@ def build_main_window():
              make_glass_btn(reg, "-SAV-DET-OUT-", "Save As CSV", 156, 36, palette="smoked", parent_bg=BG_CARD, radius=9, font_size=11, icon="save", pad=(6, 4), btn_kind="save")],
             make_cpu_slider_row("-DET-CPU-", "-DET-CPU-BADGE-", default_val=80, bg_hex=BG_CARD),
             [psg.Checkbox("Include column header ('AFRL_encrypted') in output CSV", default=False, key="-DET-HEADER-", background_color=BG_CARD, font=FONT_BOLD, pad=((6, 0), (4, 4)))]
-        ], background_color=BG_CARD, title_color=ACCENT_CYAN, font=FONT_SECTION, expand_x=True, pad=(6, 6), relief=psg.RELIEF_FLAT)],
+        ], background_color=BG_CARD, title_color=ACCENT_CYAN, font=FONT_SECTION, expand_x=True, pad=(6, 4), relief=psg.RELIEF_FLAT)],
         [psg.VPush()],
-        [psg.Push(), make_glass_btn(reg, "-BTN-RUN-DET-", "Run Detection Method  (0 / 1)", 320, 46, palette="emerald", parent_bg=BG_MAIN, radius=12, font_size=13, icon="shield", pad=(8, 10)), psg.Push()],
+        [psg.Push(), make_glass_btn(reg, "-BTN-RUN-DET-", "Run Detection Method  (0 / 1)", 320, 46, palette="emerald", parent_bg=BG_MAIN, radius=12, font_size=13, icon="shield", pad=(8, 8)), psg.Push()],
         [psg.VPush()]
     ]
 
@@ -1563,7 +1857,7 @@ def build_main_window():
     ]
 
     status_footer = psg.Column([[
-        psg.Text(f"● System Ready   │   Detected {mp.cpu_count()} Logical CPU Cores   │   36 Feature Suites + AFRL & HEDGE Detectors Ready",
+        psg.Text(f"● System Ready   │   Detected {mp.cpu_count()} Logical CPU Cores   │   36 Feature Suites + AFRL, HEDGE & EnCoD Ready",
                  font=FONT_SUBTITLE, text_color=TEXT_MUTED, background_color=BG_CARD_TOP),
         psg.Push(background_color=BG_CARD_TOP),
         psg.Text("Studio v1.1.0", font=FONT_SUBTITLE, text_color=ACCENT_CYAN, background_color=BG_CARD_TOP),
@@ -1581,7 +1875,7 @@ def build_main_window():
         [status_footer],
     ]
 
-    window = psg.Window('AFRL: An Open-Source Software Tool for Distinguishing Encrypted File Fragments from High-Entropy Data', main_layout, size=(960, 715), resizable=True, finalize=True)
+    window = psg.Window('AFRL: An Open-Source Software Tool for Distinguishing Encrypted File Fragments from High-Entropy Data', main_layout, size=(980, 790), resizable=True, finalize=True)
     set_window_icon(window)
     det_cpu_state = {"-DET-CPU-": 80}
     det_cpu_slider = SleekCpuSlider(window["-DET-CPU-"], window["-DET-CPU-BADGE-"], det_cpu_state, "-DET-CPU-", default_val=80, bg_hex=BG_CARD)
@@ -1632,6 +1926,26 @@ if __name__ == '__main__':
         if target_idx == 3 and hasattr(window, "_det_cpu_slider"):
             window._det_cpu_slider.redraw()
 
+    def _get_selected_detection_method(vals):
+        if vals.get("-DET-METHOD-HEDGE-"):
+            return "HEDGE"
+        if vals.get("-DET-METHOD-ENCOD-"):
+            return "EnCoD"
+        return "AFRL"
+
+    def _refresh_encod_status(mpath: str):
+        if not mpath:
+            window["-DET-ENCOD-STATUS-"].update(
+                "No trained model loaded — click 'Train Model' or browse a .npz file",
+                text_color=ACCENT_AMBER,
+            )
+        elif os.path.isfile(mpath):
+            summary = inspect_encod_model_summary(mpath)
+            col = ACCENT_EMERALD if summary.startswith("Ready") else "#F87171"
+            window["-DET-ENCOD-STATUS-"].update(summary, text_color=col)
+        else:
+            window["-DET-ENCOD-STATUS-"].update("Selected model file does not exist", text_color="#F87171")
+
     while True:
         event, values = window.read()
         if event in ("Exit", psg.WIN_CLOSED):
@@ -1663,19 +1977,48 @@ if __name__ == '__main__':
                 input_csv_path=values.get("-QUICK-FEAT-IN-", "").strip(),
                 output_csv_path=values.get("-QUICK-FEAT-OUT-", "").strip(),
             )
-        elif event in ("-DET-METHOD-AFRL-", "-DET-METHOD-HEDGE-"):
-            sel_method = "HEDGE" if values.get("-DET-METHOD-HEDGE-") else "AFRL"
+        elif event in ("-DET-METHOD-AFRL-", "-DET-METHOD-HEDGE-", "-DET-METHOD-ENCOD-"):
+            sel_method = _get_selected_detection_method(values)
             info = DETECTION_METHODS_REGISTRY[sel_method]
             window["-DET-METHOD-DESC-"].update(info["description"])
             window["-DET-HEADER-"].update(text=f"  Include column header ('{info['header']}') in output CSV")
+            window["-DET-ENCOD-WRAP-"].update(visible=(sel_method == "EnCoD"))
+            window.refresh()
+        elif event == "-DET-ENCOD-MODEL-":
+            _refresh_encod_status(values.get("-DET-ENCOD-MODEL-", "").strip())
+        elif event == "-BTN-TRAIN-ENCOD-":
+            trained_path = open_encod_training_studio(values.get("-DET-ENCOD-MODEL-", "").strip())
+            if trained_path:
+                window["-DET-ENCOD-MODEL-"].update(trained_path)
+                _refresh_encod_status(trained_path)
         elif event == '-BTN-RUN-DET-':
-            method_key = "HEDGE" if values.get("-DET-METHOD-HEDGE-") else "AFRL"
+            method_key = _get_selected_detection_method(values)
+            model_path = values.get("-DET-ENCOD-MODEL-", "").strip()
+            in_csv = values.get("-DET-IN-", "").strip()
+            out_csv = values.get("-DET-OUT-", "").strip()
+
+            if method_key == "EnCoD" and (not model_path or not os.path.isfile(model_path)):
+                trained_path = open_encod_training_studio(model_path)
+                if not trained_path:
+                    continue
+                model_path = trained_path
+                window["-DET-ENCOD-MODEL-"].update(model_path)
+                _refresh_encod_status(model_path)
+                if not in_csv or not out_csv:
+                    psg.popup(
+                        "EnCoD Model Ready",
+                        "Your EnCoD model is trained and loaded.\nNow choose 'Fragments CSV' and 'Predictions Output' to predict.",
+                        title="Model Ready",
+                    )
+                    continue
+
             run_detection_method_workflow(
                 method_key,
-                values.get("-DET-IN-", "").strip(),
-                values.get("-DET-OUT-", "").strip(),
+                in_csv,
+                out_csv,
                 window._det_cpu_state.get("-DET-CPU-", 80),
                 values.get("-DET-HEADER-", False),
+                model_path=model_path,
             )
         elif event == '-BTN-RUN-CMB-':
             run_csv_combine_workflow(
