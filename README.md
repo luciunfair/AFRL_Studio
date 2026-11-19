@@ -3,9 +3,10 @@
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
 [![Platform: Windows | Linux | macOS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge)](https://github.com/)
-[![Latest Release](https://img.shields.io/badge/Download-Executable%20(.exe)-10B981?style=for-the-badge&logo=windows)](https://github.com/luciunfair/AFRL_Studio/releases/tag/v1.1.0)
+[![Studio Version](https://img.shields.io/badge/Studio-v1.7-0EA5E9?style=for-the-badge)](https://github.com/luciunfair/AFRL_Studio/releases/tag/v1.7)
+[![Latest Release](https://img.shields.io/badge/Download-Executable%20(.exe)-10B981?style=for-the-badge&logo=windows)](https://github.com/luciunfair/AFRL_Studio/releases/tag/v1.7)
 
-**AFRL Studio** is an open-source software suite and GUI framework designed for distinguishing encrypted file fragments from high-entropy unencrypted data (such as compressed archives, multimedia streams, and packed executables). Based on research from the **University of Tehran**, AFRL combines real-time statistical hypothesis testing, local nibble variance analysis, and comprehensive feature extraction across a high-performance multi-core pipeline.
+**AFRL Studio (v1.7)** is an open-source software suite and GUI framework designed for distinguishing encrypted file fragments from high-entropy unencrypted data (such as compressed archives, multimedia streams, and packed executables). Based on research from the **University of Tehran**, AFRL combines real-time statistical hypothesis testing, local nibble variance analysis, comprehensive 36-suite feature extraction, and in-app pure-NumPy/SciPy neural & multi-modal ensemble training across a high-performance multi-core pipeline.
 
 ---
 
@@ -22,7 +23,7 @@
 - [4-Stage Workflow Guide & Examples](#4-stage-workflow-guide--examples)
   - [Stage 1: Fragment Extractor](#stage-1-fragment-extractor)
   - [Stage 2: Feature Studio (36 Suites / 359 Columns)](#stage-2-feature-studio-36-suites--359-columns)
-  - [Stage 3: Detection Methods (AFRL & HEDGE)](#stage-3-detection-methods-afrl--hedge)
+  - [Stage 3: Detection Methods (AFRL, HEDGE, EnCoD, DNN-BFLCp & Triumvir-Style)](#stage-3-detection-methods-afrl-hedge-encod-dnn-bflcp--triumvir-style)
   - [Stage 4: CSV Dataset Combiner](#stage-4-csv-dataset-combiner)
 - [Sample Dataset & Performance Benchmark](#sample-dataset--performance-benchmark)
 - [Directory Structure](#directory-structure)
@@ -46,7 +47,9 @@ Distinguishing encrypted data fragments from compressed or high-entropy unencryp
 
 * **Universal Any-Length Adaptation:** Automatically scales block sizes, degrees of freedom, and statistical thresholds for fragment lengths ranging from 256 bytes to 8192+ bytes.
 * **36 Feature Extraction Suites (359 Columns):** Complete implementation of NIST SP 800-22 (all 15 adaptive tests), HEDGE Chi-Square, BFLCp (LZ76, DFT, Monte Carlo $\pi$), EnCoD (256-byte distribution), AFRL, and SOTA multi-modal suites (Markov bigrams, Wiener spectral flatness, Haar wavelets, Rényi/Min/Tsallis entropies, Kolmogorov incompressibility).
-* **Direct Binary Classification Studio:** One-click execution of the **AFRL Framework** and **HEDGE Ensemble** detectors directly on raw byte fragment CSVs (outputting `1 = Encrypted`, `0 = Unencrypted`).
+* **5-Method Detection Studio (`1 = Encrypted`, `0 = Unencrypted`):**
+  * **Training-Free Statistical Detectors:** **AFRL Framework** and **HEDGE Ensemble** run immediately on raw byte fragment CSVs with zero model training required.
+  * **In-App Trainable Neural & Ensemble Detectors (Pure NumPy/SciPy):** **EnCoD Neural Network**, **DNN-BFLCp Classifier**, and **Triumvir-Style Multi-Modal Gated Ensemble** can be trained directly from Unencrypted (`0`) and Encrypted (`1`) fragment CSVs (with stratified validation/test metrics and reusable `.npz` model bundles) and then run at full speed via chunked inference.
 * **Multi-Core Parallel Execution:** Chunk-buffered streaming engine using Python `multiprocessing` with custom CPU allocation control to process multi-gigabyte datasets without RAM exhaustion.
 * **Modern Obsidian-Glass UI:** Sleek GUI built with FreeSimpleGUI, PIL vector rendering, high-contrast custom Canvas controls, and live execution progress tracking (ETR, chunk throughput, core utilization).
 
@@ -62,7 +65,7 @@ Distinguishing encrypted data fragments from compressed or high-entropy unencryp
                                                     │
                                                     ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ STAGE 1: FRAGMENT EXTRACTOR                                                                           │
+│ STAGE 1: FRAGMENT EXTRACTOR                                                                            │
 │ • Dataset-Wide Random Sampling  │  • Per-File Uniform Sampling  │  • Random Padded Slicing             │
 └───────────────────────────────────────────────────┬────────────────────────────────────────────────────┘
                                                     │
@@ -75,9 +78,10 @@ Distinguishing encrypted data fragments from compressed or high-entropy unencryp
                      ┌────────────────────┘                   └────────────────────┐
                      ▼                                                             ▼
 ┌────────────────────────────────────────┐                   ┌───────────────────────────────────────────┐
-│ STAGE 2: FEATURE EXTRACTION STUDIO     │                   │ STAGE 3: DIRECT DETECTION METHODS         │
-│ • Extract up to 359 Features           │                   │ • AFRL Detector (LNV + AET + FWT + RT)    │
-│ • NIST 1-15, HEDGE, BFLCp, SOTA, AFRL  │                   │ • HEDGE Detector (Chi2 + NIST Ensemble)   │
+│ STAGE 2: FEATURE EXTRACTION STUDIO     │                   │ STAGE 3: DETECTION METHODS                │
+│ • Extract up to 359 Features           │                   │ • Training-Free: AFRL, HEDGE              │
+│ • NIST 1-15, HEDGE, BFLCp, SOTA, AFRL  │                   │ • Train & Predict: EnCoD, DNN-BFLCp,      │
+│                                        │                   │   Triumvir-Style Multi-Modal Ensemble     │
 └────────────────────┬───────────────────┘                   └─────────────────────┬─────────────────────┘
                      │                                                             │
                      ▼                                                             ▼
@@ -114,7 +118,7 @@ Select from 36 statistical suites (359 feature columns) with multi-core parallel
 </p>
 
 ### 3. Encrypted Fragment Detection Methods
-Direct threshold-based binary classification (AFRL Framework & HEDGE Ensemble) outputting 0/1 predictions.
+Run training-free detectors (**AFRL** & **HEDGE**) or train and deploy pure-NumPy/SciPy classifiers (**EnCoD**, **DNN-BFLCp**, & **Triumvir-Style Ensemble**) outputting `0 / 1` predictions.
 <p align="center">
   <img src="screenshots/Detection_Methods.png" alt="Detection Methods Interface" width="850"/>
 </p>
@@ -133,7 +137,7 @@ Merge feature and fragment datasets vertically along rows (Axis 0) or horizontal
 
 You can download the pre-compiled, standalone Windows application without needing Python or any dependency installation:
 
-1. Visit the **[Latest Release Page (v1.1.0)](https://github.com/luciunfair/AFRL_Studio/releases/tag/v1.1.0)**.
+1. Visit the **[Latest Release Page (v1.7)](https://github.com/luciunfair/AFRL_Studio/releases/tag/v1.7)**.
 2. Download the `AFRL_Studio.zip` archive from assets.
 3. Extract the ZIP file and run `AFRL_Studio.exe`.
 
@@ -179,17 +183,11 @@ To package the application manually using PyInstaller:
    pip install pyinstaller
    ```
 
-2. **Run PyInstaller Build Command:**
+2. **Run PyInstaller Build Using the Included Spec File (Recommended):**
    ```bash
-   pyinstaller --noconfirm --onedir --windowed \
-     --name "AFRL_Studio" \
-     --icon="icons/main_icon.ico" \
-     --add-data "icons;icons" \
-     --add-data "fragment_extractor;fragment_extractor" \
-     --add-data "feature_extractor;feature_extractor" \
-     --add-data "combine_csv;combine_csv" \
-     MainGui.py
+   pyinstaller --noconfirm AFRL_Studio.spec
    ```
+   *(Or run the explicit CLI equivalent documented in `pyinstaller.txt`, including all `--paths` and `--hidden-import` flags for the pure-NumPy/SciPy training modules.)*
 
 3. Locate the executable in `dist/AFRL_Studio/AFRL_Studio.exe`.
 
@@ -225,16 +223,33 @@ Extracts cryptographic and statistical metrics per fragment row for machine lear
 
 ---
 
-### Stage 3: Detection Methods (AFRL & HEDGE)
+### Stage 3: Detection Methods (AFRL, HEDGE, EnCoD, DNN-BFLCp & Triumvir-Style)
 
-Direct binary classification studio that evaluates raw fragment CSV files without requiring training machine learning models.
+Unified binary classification studio (`1 = Encrypted`, `0 = Unencrypted`) combining training-free statistical detectors with in-app trainable neural and multi-modal ensemble models implemented in pure NumPy/SciPy (no PyTorch installation required).
 
-#### Supported Methods
+#### A. Training-Free Statistical Methods
 
-1. **AFRL Lightweight Framework:**
+1. **AFRL Lightweight Framework (`AFRL_encrypted`):**
    * **Rule:** $\text{LNV} \le 46.98 \land p_{\text{AET}} \ge 0.01 \land p_{\text{FWT}} \ge 0.01 \land p_{\text{RT}} \ge 0.01 \implies 1 \text{ (Encrypted)}$, else $0$.
-2. **HEDGE Ensemble Detector:**
+2. **HEDGE Ensemble Detector (`HEDGE_encrypted`):**
    * **Rule:** Evaluates 5 conditions: AET, FWT, Cumulative Sums, Chi-Square Absolute Band ($\mu \pm 2\sigma$), and Chi-Square Confidence Interval ($0.01 \le p \le 0.99$).
+
+#### B. Trainable Neural & Ensemble Methods (In-App Training Studio)
+
+Select **EnCoD**, **DNN-BFLCp**, or **Triumvir-Style**, then click **Train Model** (or **Browse Model** to reload a saved bundle) before predicting target fragment CSVs:
+
+3. **EnCoD Neural Network (`EnCoD_encrypted`):**
+   * Extracts 256-bin byte probability histograms and trains `BinaryAll_SELU` (`256 → 1024 → 512 → 256 → 2` SELU MLP) or `BinarySingle_ReLU` (`256 → 1024 → 512 → 256 → 2` ReLU MLP) with `MinMax [0, 2]` (strictly fit on train split) or length-invariant `Fixed [0, 2]` scaling, saved as a `.npz` bundle.
+4. **DNN-BFLCp Classifier (`BFLCp_encrypted`):**
+   * Implements Skračić et al. (2023): extracts BFD (256) + DFT (10) + Normalized LZ76 (1) + Chi-Square Stat/p-val (2) [+ Monte Carlo $\pi$ in `BFLCp_270` vs `BFLCp_268`], scales features (`StandardScaler` or `MinMax [0, 2]`), and trains a 5-hidden-layer BatchNorm + Dropout DNN (`270/268 → 512 → 256 → 128 → 64 → 32 → 2`). Supports saving/loading `.npz` bundles and loading compatible `.pth` checkpoints.
+5. **Triumvir-Style Multi-Modal Gated Ensemble (`Triumvir_encrypted`):**
+   * **Triumvir-inspired pure-NumPy/SciPy architecture** (no PyTorch Transformer/2D-CNN dependency) splitting each fragment into three complementary modalities (`305` total dims in `Triumvir_Full`, or `302` dims omitting KS/Wasserstein in `Triumvir_Fast`):
+     * **Statistical (`269` / `266` dims):** BFD (256), Chi2 stat/p-value, 4 moments, KS stat/p-value, Wasserstein distance, IoC, Rényi/Min/Tsallis entropies -> `SELU` Expert MLP (`→ 256 → 128 → 64 → 2`).
+     * **Sequential (`14` dims):** Lag-{1,2,4,8} autocorrelations, mod-256 diff entropy, mean abs diff, printable ASCII ratio, 4 Markov bigram features, LZ76, `zlib` compression ratio, normalized max byte run -> `BatchNorm1d + Dropout + ReLU` Expert MLP (`14 → 128 → 64 → 32 → 2`).
+     * **Spatial/Spectral (`22` dims):** 10 DFT top-5 peak magnitudes/indices, Haar wavelet detail ratio, Wiener spectral flatness, LNV, 64-byte window mean Chi2, 4 2D grid transition features, 4 8-block heterogeneity features -> `BatchNorm1d + Dropout + ReLU` Expert MLP (`22 → 128 → 64 → 32 → 2`).
+   * Fits per-expert calibration temperatures ($T \in [0.1, 10.0]$ via `scipy.optimize.minimize_scalar`) and a 9-input **Gating MLP** (`cal_logits` + confidence margins) trained with mixture cross-entropy, saved as a `.npz` bundle.
+
+> **Training Workflow:** Supply **Unencrypted Train (`0`)** and **Encrypted Train (`1`)** raw byte CSVs (plus optional held-out Test CSVs), configure architecture, scaler, epochs, batch size, learning rate, validation split, and early-stopping patience, and run multi-core training with live progress and ETR. Once saved, the trained `.npz` bundle can be reused on any target fragment CSV.
 
 ---
 
@@ -250,9 +265,9 @@ The repository includes a benchmark dataset in `sample_dataset/sample_dataset.cs
 * **Rows 1 to 10:** Unencrypted fragments (High-entropy compressed/media data).
 * **Rows 11 to 20:** Encrypted fragments (AES-256 encrypted payload).
 
-### Comparative Method Evaluation
+### Comparative Method Evaluation (Training-Free Baselines)
 
-Running both detection methods on `sample_dataset/sample_dataset.csv` yields the following performance results:
+Running the training-free baseline methods on `sample_dataset/sample_dataset.csv` yields the following benchmark results saved in `output_sample/`. *(For **EnCoD**, **DNN-BFLCp**, and **Triumvir-Style**, train a model in Stage 3 on your own Unencrypted/Encrypted CSV split first, then run detection on target CSVs.)*
 
 | Detection Method | Unencrypted Accuracy (Rows 1–10) | Encrypted Accuracy (Rows 11–20) | Overall Accuracy |
 | :--- | :--- | :--- | :--- |
@@ -317,36 +332,45 @@ Running both detection methods on `sample_dataset/sample_dataset.csv` yields the
 
 ```text
 AFRL_Studio/
-├── MainGui.py                     # Main Obsidian-Glass Application & GUI Pipeline
-├── AFRL_fspecials.py              # AFRL LNV & Decision Fusion Core Engine
-├── HEDGE_fspecials.py             # HEDGE Chi-Square & Ensemble Suite
-├── BLFCP_fspecials.py             # BFLCp & EnCoD Feature Extractor
-├── SOTA_fspecials.py              # Multi-Modal, Markov & Spectral Feature Engine
-├── combine.py                     # High-Performance CSV Streaming Merger
-├── requirements.txt               # Dependency Requirements
-├── LICENSE                        # GNU General Public License v3.0
-├── README.md                      # Project Documentation
+├── MainGui.py                         # Main Obsidian-Glass Application & GUI Pipeline (v1.7)
+├── AFRL_Studio.spec                   # PyInstaller Spec (bundles pure-NumPy/SciPy & asset suites)
+├── combine_csv/
+│   └── combine.py                     # High-Performance CSV Streaming Merger
+├── requirements.txt                   # Dependency Requirements
+├── LICENSE                            # GNU General Public License v3.0
+├── readme.md                          # Project Documentation
 │
-├── fragment_extractor/            # Slicing Engine Modules
+├── fragment_extractor/                # Slicing Engine Modules
 │   ├── extract_whole_folder_fragments.py
 │   └── extract_each_file_fragments.py
 │
-├── feature_extractor/             # Feature Suites & NIST Submodules
-│   ├── NIST/                      # NIST SP 800-22 Python Port
-│   ├── AFRL_specials/
-│   ├── HEDGE_specials/
-│   ├── BLFCP_specials/
-│   └── SOTA_specials/
+├── feature_extractor/                 # Feature Suites, NIST Submodules & Pure-NumPy/SciPy Trainers
+│   ├── nn_utils.py                    # Shared MLP/BatchNorm/Dropout, Scalers, Splits & CSV Chunking
+│   ├── NIST/                          # NIST SP 800-22 Python Port (15 Adaptive Tests)
+│   │   └── nist_suite.py
+│   ├── AFRL_specials/                 # AFRL LNV & Decision Fusion Core Engine
+│   │   └── AFRL_fspecials.py
+│   ├── HEDGE_specials/                # HEDGE Chi-Square & Ensemble Suite
+│   │   └── HEDGE_fspecials.py
+│   ├── BLFCP_specials/                # BFLCp Features & 5-Layer BatchNorm+Dropout DNN
+│   │   ├── BLFCP_fspecials.py
+│   │   └── BFLCP_dnn.py
+│   ├── EnCoD_specials/                # EnCoD Byte-Histogram MLP Trainer & Predictor
+│   │   └── EnCoD_fspecials.py
+│   ├── SOTA_specials/                 # Multi-Modal, Markov & Spectral Feature Engine
+│   │   └── SOTA_fspecials.py
+│   └── Triumvir_specials/             # Triumvir-Style 3-Expert Multi-Modal Gated Ensemble
+│       └── Triumvir_ensemble.py
 │
-├── icons/                         # Application Icons & Vector Assets
+├── icons/                             # Application Icons & Vector Assets
 │   ├── main_icon.png
 │   └── main_icon.ico
 │
-├── sample_dataset/                # Benchmark Sample Files
+├── sample_dataset/                    # Benchmark Sample Files
 │   ├── sample_dataset.csv
 │   └── sample.py
 │
-├── output_sample/                 # Sample Output Predictions & Feature Matrices
+├── output_sample/                     # Sample Output Predictions & Feature Matrices
 │   ├── AFRL_detection/
 │   │   └── AFRL_detection.csv
 │   ├── HEDGE_detection/
@@ -354,7 +378,7 @@ AFRL_Studio/
 │   └── all_features/
 │       └── all_features.csv
 │
-└── screenshots/                   # GUI Documentation Images
+└── screenshots/                       # GUI Documentation Images
     ├── Fragment_Extractor.png
     ├── Feature_Studio.png
     ├── Detection_Methods.png
