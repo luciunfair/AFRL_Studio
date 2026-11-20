@@ -3,9 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# PyInstaller build outputs (keep AFRL_Studio.spec tracked for reproducible builds)
+# PyInstaller & packaging build outputs (keep AFRL_Studio.spec and pyproject.toml tracked)
 build/
 dist/
+*.egg-info/
+uv.lock
 
 # Virtual environments
 venv/

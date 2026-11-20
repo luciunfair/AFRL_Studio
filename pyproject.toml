@@ -1,0 +1,97 @@
+[build-system]
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "afrl-studio"
+version = "1.7.0"
+description = "Open-source Python software suite for statistical feature extraction and multi-paradigm encrypted file fragment detection"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+authors = [
+    { name = "Alireza Aliaskari Hosseinabadi", email = "alireza.aliaskari@ut.ac.ir" },
+    { name = "Mehdi Teimouri", email = "mehditeimouri@ut.ac.ir" },
+]
+keywords = [
+    "encrypted-fragment-detection",
+    "digital-forensics",
+    "high-entropy",
+    "nist-sp-800-22",
+    "statistical-randomness",
+    "ransomware-detection",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "numpy>=1.24.2",
+    "pandas>=2.0.0",
+    "Pillow>=10.2.0",
+    "FreeSimpleGUI>=5.1.0",
+    "scipy>=1.10.0",
+    "dask[dataframe]>=2024.1.0",
+    "fsspec>=2024.1.0",
+]
+
+[project.optional-dependencies]
+build = [
+    "pyinstaller>=6.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/luciunfair/AFRL_Studio"
+Repository = "https://github.com/luciunfair/AFRL_Studio"
+Documentation = "https://github.com/luciunfair/AFRL_Studio/blob/main/README.md"
+Releases = "https://github.com/luciunfair/AFRL_Studio/releases"
+
+[project.scripts]
+afrl-studio = "MainGui:main"
+
+[tool.hatch.build.targets.wheel]
+only-include = [
+    "MainGui.py",
+    "feature_extractor",
+    "fragment_extractor",
+    "combine_csv",
+    "icons",
+]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/*.pyo",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/MainGui.py",
+    "/pyproject.toml",
+    "/requirements.txt",
+    "/README.md",
+    "/LICENSE",
+    "/AFRL_Studio.spec",
+    "/feature_extractor/**",
+    "/fragment_extractor/**",
+    "/combine_csv/**",
+    "/icons/**",
+    "/sample_dataset/**",
+    "/output_sample/**",
+    "/tests/**",
+]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/*.pyo",
+]

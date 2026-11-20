@@ -411,5 +411,33 @@ class TestStage4CSVCombiner(unittest.TestCase):
             self.assertEqual(cols, [["c1", "c2", "c3"], ["1", "2", "9"], ["3", "4", "10"]])
 
 
+class TestPackagingMetadata(unittest.TestCase):
+    def test_pyproject_toml_and_entry_point(self):
+        pyproject_path = os.path.join(REPO_ROOT, "pyproject.toml")
+        req_path = os.path.join(REPO_ROOT, "requirements.txt")
+        self.assertTrue(os.path.isfile(pyproject_path))
+
+        try:
+            import tomllib
+        except ImportError:
+            self.skipTest("tomllib requires Python 3.11+")
+
+        with open(pyproject_path, "rb") as f:
+            cfg = tomllib.load(f)
+
+        proj = cfg["project"]
+        self.assertEqual(proj["name"], "afrl-studio")
+        self.assertTrue(proj["version"].startswith("1.7"))
+        self.assertEqual(proj["scripts"]["afrl-studio"], "MainGui:main")
+
+        with open(req_path, "r", encoding="utf-8") as f:
+            req_lines = [ln.strip() for ln in f if ln.strip() and not ln.strip().startswith("#")]
+        self.assertEqual(proj["dependencies"], req_lines)
+
+        import MainGui
+        self.assertTrue(callable(MainGui.main))
+        self.assertTrue(os.path.isfile(MainGui.resource_path(os.path.join("icons", "main_icon.png"))))
+
+
 if __name__ == "__main__":
     unittest.main()

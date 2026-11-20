@@ -18,8 +18,9 @@
 - [GUI Screenshots Gallery](#gui-screenshots-gallery)
 - [Installation & Direct EXE Download](#installation--direct-exe-download)
   - [Option A: Direct Executable Download (Recommended)](#option-a-direct-executable-download-recommended)
-  - [Option B: Running from Source](#option-b-running-from-source)
-  - [Option C: Building Standalone Executable (.exe)](#option-c-building-standalone-executable-exe)
+  - [Option B: Running with uv (Recommended for Python Users)](#option-b-running-with-uv-recommended-for-python-users)
+  - [Option C: Running from Source with pip / venv](#option-c-running-from-source-with-pip--venv)
+  - [Option D: Building Standalone Executable (.exe)](#option-d-building-standalone-executable-exe)
 - [4-Stage Workflow Guide & Examples](#4-stage-workflow-guide--examples)
   - [Stage 1: Fragment Extractor](#stage-1-fragment-extractor)
   - [Stage 2: Feature Studio (36 Suites / 359 Columns)](#stage-2-feature-studio-36-suites--359-columns)
@@ -144,7 +145,33 @@ You can download the pre-compiled, standalone Windows application without needin
 
 ---
 
-### Option B: Running from Source
+### Option B: Running with `uv` (Recommended for Python Users)
+
+AFRL Studio provides a PEP 621 [`pyproject.toml`](pyproject.toml) configuration for fast, reproducible installation with **[uv](https://docs.astral.sh/uv/)**:
+
+1. **Clone and Sync Dependencies:**
+   ```bash
+   git clone https://github.com/luciunfair/AFRL_Studio.git
+   cd AFRL_Studio
+   uv sync
+   ```
+
+2. **Launch AFRL Studio (via CLI Entry Point or Script):**
+   ```bash
+   uv run afrl-studio
+   # or:
+   uv run python MainGui.py
+   ```
+
+3. **Or Install Directly as an Isolated Tool from GitHub (No Manual Clone Required):**
+   ```bash
+   uv tool install git+https://github.com/luciunfair/AFRL_Studio.git
+   afrl-studio
+   ```
+
+---
+
+### Option C: Running from Source with `pip` / `venv`
 
 1. **Clone the Repository:**
    ```bash
@@ -163,29 +190,37 @@ You can download the pre-compiled, standalone Windows application without needin
    source venv/bin/activate
    ```
 
-3. **Install Dependencies:**
+3. **Install Dependencies (via `pyproject.toml` or `requirements.txt`):**
    ```bash
+   pip install -e .
+   # or:
    pip install -r requirements.txt
    ```
 
 4. **Launch the GUI Application:**
    ```bash
+   afrl-studio
+   # or:
    python MainGui.py
    ```
 
 ---
 
-### Option C: Building Standalone Executable (.exe)
+### Option D: Building Standalone Executable (.exe)
 
 To package the application manually using PyInstaller:
 
-1. **Install PyInstaller:**
+1. **Install PyInstaller (via `uv` optional extra or `pip`):**
    ```bash
+   uv sync --extra build
+   # or:
    pip install pyinstaller
    ```
 
 2. **Run PyInstaller Build Using the Included Spec File (Recommended):**
    ```bash
+   uv run pyinstaller --noconfirm AFRL_Studio.spec
+   # or:
    pyinstaller --noconfirm AFRL_Studio.spec
    ```
    *(Or run the explicit CLI equivalent documented in `pyinstaller.txt`, including all `--paths` and `--hidden-import` flags for the pure-NumPy/SciPy training modules.)*
@@ -304,6 +339,8 @@ All five detectors were evaluated on the held-out validation splits of **ITC-IT*
 AFRL Studio includes a pure-stdlib `unittest` regression and round-trip test suite covering Stage 1 slicing, Stage 2 any-length feature extraction (256 B / 512 B / 4096 B) and `sample_dataset.csv` verification, Stage 3 train/save/load/predict round-trips for EnCoD, DNN-BFLCp, and Triumvir-Style, and Stage 4 chunked CSV concatenation:
 
 ```bash
+uv run python -m unittest discover -s tests -v
+# or without uv:
 python -m unittest discover -s tests -v
 ```
 
@@ -314,6 +351,7 @@ python -m unittest discover -s tests -v
 ```text
 AFRL_Studio/
 ├── MainGui.py                         # Main Obsidian-Glass Application & GUI Pipeline (v1.7)
+├── pyproject.toml                     # PEP 621 Package Metadata (uv / pip install & afrl-studio CLI)
 ├── AFRL_Studio.spec                   # PyInstaller Spec (bundles pure-NumPy/SciPy & asset suites)
 ├── combine_csv/
 │   └── combine.py                     # High-Performance CSV Streaming Merger

@@ -19,11 +19,11 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageTk
 # PATH & RESOURCE MANAGEMENT (Cross-Platform & PyInstaller Ready)
 # =====================================================================
 def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller."""
+    """Get absolute path to resource, works for dev, uv/pip install, and PyInstaller."""
     try:
         base_path = sys._MEIPASS
     except Exception:
-        base_path = os.path.abspath(".")
+        base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, relative_path)
 
 
@@ -2014,7 +2014,7 @@ def _prewarm_studio_assets():
             GLASS.render(txt, w, h, pal, st, bg, r, fs, ic)
 
 
-if __name__ == '__main__':
+def main():
     mp.freeze_support()
     mp.set_start_method('spawn', force=True)
 
@@ -2165,3 +2165,7 @@ if __name__ == '__main__':
             )
 
     window.close()
+
+
+if __name__ == '__main__':
+    main()
