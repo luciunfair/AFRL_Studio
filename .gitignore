@@ -3,10 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# PyInstaller build outputs
+# PyInstaller build outputs (keep AFRL_Studio.spec tracked for reproducible builds)
 build/
 dist/
-*.spec
 
 # Virtual environments
 venv/
@@ -17,10 +16,13 @@ env/
 .vscode/
 .idea/
 
-
 # OS metadata
 .DS_Store
 Thumbs.db
 
-#installer
+# Local large raw benchmark corpora (~3.4 GB; download via public Google Drive links in README.md)
+dataset/
+
+# Installer notes & local manuscript working folder
 pyinstaller.txt
+journal/

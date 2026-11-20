@@ -131,28 +131,30 @@ def concatenate_columns_gui(window: psg.Window, file_list: List[str], output_fil
         start_time = time.time()
         first_chunk = True
 
-        with open(output_file, 'w', newline='', encoding='utf-8') as f_out:
-            for i, chunks in enumerate(zip(*file_iterators)):
-                event, _ = window.read(timeout=0)
-                if event in (psg.WIN_CLOSED, '-CNL-'):
-                    psg.popup("Cancelled", "Column merge stopped by user.")
-                    return False
+        try:
+            with open(output_file, 'w', newline='', encoding='utf-8') as f_out:
+                for i, chunks in enumerate(zip(*file_iterators)):
+                    event, _ = window.read(timeout=0)
+                    if event in (psg.WIN_CLOSED, '-CNL-'):
+                        psg.popup("Cancelled", "Column merge stopped by user.")
+                        return False
 
-                for c in chunks:
-                    c.reset_index(drop=True, inplace=True)
+                    aligned_chunks = [c.reset_index(drop=True) for c in chunks]
+                    merged_chunk = pd.concat(aligned_chunks, axis=1)
+                    write_header = header if first_chunk else False
+                    merged_chunk.to_csv(f_out, sep=sep, index=False, header=write_header, encoding='utf-8')
+                    first_chunk = False
 
-                merged_chunk = pd.concat(chunks, axis=1)
-                write_header = header if first_chunk else False
-                merged_chunk.to_csv(f_out, sep=sep, index=False, header=write_header, encoding='utf-8')
-                first_chunk = False
-
-                batch_num = i + 1
-                elapsed = time.time() - start_time
-                pct = min(1.0, batch_num / float(total_batches))
-                etr = (elapsed / pct) - elapsed if pct > 0 else 0.0
-                window['-PROGRESS-'].update(min(batch_num, total_batches))
-                window['-STATUS-'].update(f'Merged column batch {batch_num} of {total_batches}...')
-                window['-TIME-'].update(f"Elapsed: {format_time(elapsed)} | ETR: {format_time(etr)}")
+                    batch_num = i + 1
+                    elapsed = time.time() - start_time
+                    pct = min(1.0, batch_num / float(total_batches))
+                    etr = (elapsed / pct) - elapsed if pct > 0 else 0.0
+                    window['-PROGRESS-'].update(min(batch_num, total_batches))
+                    window['-STATUS-'].update(f'Merged column batch {batch_num} of {total_batches}...')
+                    window['-TIME-'].update(f"Elapsed: {format_time(elapsed)} | ETR: {format_time(etr)}")
+        finally:
+            for it in file_iterators:
+                it.close()
 
         elapsed = time.time() - start_time
         window['-STATUS-'].update('Completed successfully!')

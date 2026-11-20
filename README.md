@@ -25,7 +25,8 @@
   - [Stage 2: Feature Studio (36 Suites / 359 Columns)](#stage-2-feature-studio-36-suites--359-columns)
   - [Stage 3: Detection Methods (AFRL, HEDGE, EnCoD, DNN-BFLCp & Triumvir-Style)](#stage-3-detection-methods-afrl-hedge-encod-dnn-bflcp--triumvir-style)
   - [Stage 4: CSV Dataset Combiner](#stage-4-csv-dataset-combiner)
-- [Sample Dataset & Performance Benchmark](#sample-dataset--performance-benchmark)
+- [Sample Dataset & Full-Scale Benchmarks](#sample-dataset--full-scale-benchmarks)
+- [Running Automated Tests](#running-automated-tests)
 - [Directory Structure](#directory-structure)
 - [Citation](#citation)
 - [License](#license)
@@ -239,9 +240,9 @@ Unified binary classification studio (`1 = Encrypted`, `0 = Unencrypted`) combin
 Select **EnCoD**, **DNN-BFLCp**, or **Triumvir-Style**, then click **Train Model** (or **Browse Model** to reload a saved bundle) before predicting target fragment CSVs:
 
 3. **EnCoD Neural Network (`EnCoD_encrypted`):**
-   * Extracts 256-bin byte probability histograms and trains `BinaryAll_SELU` (`256 → 1024 → 512 → 256 → 2` SELU MLP) or `BinarySingle_ReLU` (`256 → 1024 → 512 → 256 → 2` ReLU MLP) with `MinMax [0, 2]` (strictly fit on train split) or length-invariant `Fixed [0, 2]` scaling, saved as a `.npz` bundle.
+   * Extracts 256-bin byte probability histograms and trains `BinaryAll_SELU` (`256 → 256 → 256 → 256 → 128 → 2` SELU + LeCun Normal MLP) or `BinarySingle_ReLU` (`256 → 256 → 256 → 64 → 2` ReLU + Glorot Uniform MLP) with `MinMax [0, 2]` (strictly fit on train split) or length-invariant `Fixed [0, 2]` scaling, saved as a `.npz` bundle.
 4. **DNN-BFLCp Classifier (`BFLCp_encrypted`):**
-   * Implements Skračić et al. (2023): extracts BFD (256) + DFT (10) + Normalized LZ76 (1) + Chi-Square Stat/p-val (2) [+ Monte Carlo $\pi$ in `BFLCp_270` vs `BFLCp_268`], scales features (`StandardScaler` or `MinMax [0, 2]`), and trains a 5-hidden-layer BatchNorm + Dropout DNN (`270/268 → 512 → 256 → 128 → 64 → 32 → 2`). Supports saving/loading `.npz` bundles and loading compatible `.pth` checkpoints.
+   * Implements Skračić et al. (2023, Fig. 1): extracts BFD (256) + DFT (10) + Normalized LZ76 (1) + Chi-Square Stat/p-val (2) [+ Monte Carlo $\pi$ in `BFLCp_270` vs `BFLCp_268`], scales features (`StandardScaler` or `MinMax [0, 2]`), and trains a 5-hidden-layer BatchNorm + Dropout DNN (`270/268 → 1024 → 1536 → 1280 → 2048 → 1024 → 2`). Supports saving/loading `.npz` bundles and loading compatible `.pth` checkpoints.
 5. **Triumvir-Style Multi-Modal Gated Ensemble (`Triumvir_encrypted`):**
    * **Triumvir-inspired pure-NumPy/SciPy architecture** (no PyTorch Transformer/2D-CNN dependency) splitting each fragment into three complementary modalities (`305` total dims in `Triumvir_Full`, or `302` dims omitting KS/Wasserstein in `Triumvir_Fast`):
      * **Statistical (`269` / `266` dims):** BFD (256), Chi2 stat/p-value, 4 moments, KS stat/p-value, Wasserstein distance, IoC, Rényi/Min/Tsallis entropies -> `SELU` Expert MLP (`→ 256 → 128 → 64 → 2`).
@@ -259,72 +260,52 @@ Merges CSV files vertically along rows (Axis 0) or side-by-side along columns (A
 
 ---
 
-## Sample Dataset & Performance Benchmark
+## Sample Dataset & Full-Scale Benchmarks
 
-The repository includes a benchmark dataset in `sample_dataset/sample_dataset.csv` containing:
-* **Rows 1 to 10:** Unencrypted fragments (High-entropy compressed/media data).
-* **Rows 11 to 20:** Encrypted fragments (AES-256 encrypted payload).
+### 1. Quick Repository Walkthrough (`sample_dataset/sample_dataset.csv`)
 
-### Comparative Method Evaluation (Training-Free Baselines)
+The repository includes a compact 20-fragment, 4096-byte benchmark in `sample_dataset/sample_dataset.csv` containing:
+* **Rows 1 to 10:** Unencrypted high-entropy compressed/structured fragments sampled from ITC-IT and EnCoD validation pools.
+* **Rows 11 to 20:** Encrypted fragments (AES ciphertexts).
 
-Running the training-free baseline methods on `sample_dataset/sample_dataset.csv` yields the following benchmark results saved in `output_sample/`. *(For **EnCoD**, **DNN-BFLCp**, and **Triumvir-Style**, train a model in Stage 3 on your own Unencrypted/Encrypted CSV split first, then run detection on target CSVs.)*
+Running the training-free baseline methods on `sample_dataset/sample_dataset.csv` reproduces the verified outputs saved in `output_sample/`:
 
 | Detection Method | Unencrypted Accuracy (Rows 1–10) | Encrypted Accuracy (Rows 11–20) | Overall Accuracy |
 | :--- | :--- | :--- | :--- |
-| **AFRL Framework** | **8 / 10 (100%)** | **10 / 10 (100%)** | **18 / 20 (90.0%)** |
-| **HEDGE Detector** | **10 / 10 (100%)** | **6 / 10 (60%)** | **16 / 20 (80.0%)** |
+| **AFRL Framework** | **8 / 10 (80.0%)** | **10 / 10 (100.0%)** | **18 / 20 (90.0%)** |
+| **HEDGE Detector** | **8 / 10 (80.0%)** | **10 / 10 (100.0%)** | **18 / 20 (90.0%)** |
 
-#### Output Benchmark CSV Files
+Both detectors predict `0, 0, 0, 0, 0, 1, 1, 0, 0, 0` on Rows 1–10 and `1, 1, 1, 1, 1, 1, 1, 1, 1, 1` on Rows 11–20 (saved in `output_sample/AFRL_detection/AFRL_detection.csv` and `output_sample/HEDGE_detection/HEDGE_detection.csv`), alongside the complete 20 × 359 feature table in `output_sample/all_features/all_features.csv`.
 
-* **AFRL Framework Output (`output_sample/AFRL_detection/AFRL_detection.csv`):**
-  ```csv
-  AFRL_encrypted
-  0
-  0
-  0
-  0
-  0
-  1
-  1
-  0
-  0
-  0
-  1
-  1
-  1
-  1
-  1
-  1
-  1
-  1
-  1
-  1
-  ```
+---
 
-* **HEDGE Detector Output (`output_sample/HEDGE_detection/HEDGE_detection.csv`):**
-  ```csv
-  HEDGE_encrypted
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  1
-  0
-  1
-  1
-  1
-  0
-  1
-  0
-  1
-  0
-  ```
+### 2. Full-Scale Real-Dataset Benchmarks (`ITC-IT` & `EnCoD`, 4096-byte Fragments)
+
+All five detectors were evaluated on the held-out validation splits of **ITC-IT** (25,648 fragments: 12,824 Unencrypted + 12,824 Encrypted) and **EnCoD** (24,000 fragments: 12,000 Unencrypted + 12,000 Encrypted) at 80% CPU utilization (12 of 16 logical cores, AMD Ryzen 7 5800H, 32 GB RAM, Python 3.14.8). All three trainable models (`EnCoD BinaryAll_SELU`, `DNN-BFLCp BFLCp_270`, and `Triumvir-Style Triumvir_Full`) were trained strictly on each dataset's training split with zero validation/test leakage using Stage 3's default settings:
+
+| Method | Train Split | ITC-IT Val Acc (F1) | EnCoD Val Acc (F1) | Latency (ms/frag) |
+| :--- | :--- | :---: | :---: | :---: |
+| **AFRL** | Training-Free | **95.80%** (**95.85%**) | 84.24% (86.00%) | 0.091–0.200 |
+| **HEDGE** | Training-Free | 93.85% (93.76%) | 82.75% (84.27%) | 0.132–0.136 |
+| **EnCoD (SELU)** | Intra / Cross | 90.84% (91.24%) / 86.77% | 84.35% (86.03%) / 82.79% | **0.042–0.048** |
+| **DNN-BFLCp** | Intra / Cross | 89.64% (90.55%) / 86.69% | 84.23% (85.92%) / 80.71% | 0.408–0.417 |
+| **Triumvir-Style** | Intra / Cross | 94.85% (95.00%) / **93.37%** | **85.74%** (**87.19%**) / 83.83% | 1.636–1.648 |
+
+> **Pre-Trained `.npz` Model Bundles & Public Evaluation Datasets:**
+> * **Pre-Trained Models (`trained_models/`):** All six default-trained v1.7 `.npz` model bundles (`EnCoD_Detection/`, `BFLCp_Detection/`, and `Triumvir_Detection/` for both ITC-IT and EnCoD) are included directly in this repository so you can immediately load them in Stage 3 without retraining.
+> * **Extracted 4096-Byte Fragment Datasets (Public Google Drive Splits):**
+>   * **ITC-IT fragments (`102,586` train + `25,648` val):** [Google Drive Folder](https://drive.google.com/drive/folders/1bDwUg5lHRk7DoZVlaM0tgYBxduquuETN) (derived from ITC-Image / Tavassoli et al. 2024 and ITC-Text / Mansouri Hanis & Teimouri 2019; protocol in Hosseinabadi & Teimouri 2026)
+>   * **EnCoD fragments (`96,000` train + `24,000` val):** [Google Drive Folder](https://drive.google.com/drive/folders/1fgK8ugh8ETmrWlgfItpgilVDqyrpQrWU) (derived from De Gaspari et al. 2022)
+
+---
+
+## Running Automated Tests
+
+AFRL Studio includes a pure-stdlib `unittest` regression and round-trip test suite covering Stage 1 slicing, Stage 2 any-length feature extraction (256 B / 512 B / 4096 B) and `sample_dataset.csv` verification, Stage 3 train/save/load/predict round-trips for EnCoD, DNN-BFLCp, and Triumvir-Style, and Stage 4 chunked CSV concatenation:
+
+```bash
+python -m unittest discover -s tests -v
+```
 
 ---
 
@@ -338,7 +319,7 @@ AFRL_Studio/
 │   └── combine.py                     # High-Performance CSV Streaming Merger
 ├── requirements.txt                   # Dependency Requirements
 ├── LICENSE                            # GNU General Public License v3.0
-├── readme.md                          # Project Documentation
+├── README.md                          # Project Documentation
 │
 ├── fragment_extractor/                # Slicing Engine Modules
 │   ├── extract_whole_folder_fragments.py
@@ -362,15 +343,30 @@ AFRL_Studio/
 │   └── Triumvir_specials/             # Triumvir-Style 3-Expert Multi-Modal Gated Ensemble
 │       └── Triumvir_ensemble.py
 │
+├── tests/                             # Automated Unit & Regression Test Suite
+│   └── test_afrl_studio.py
+├── .github/workflows/ci.yml           # Cross-Platform GitHub Actions CI
+│
 ├── icons/                             # Application Icons & Vector Assets
 │   ├── main_icon.png
 │   └── main_icon.ico
 │
-├── sample_dataset/                    # Benchmark Sample Files
+├── sample_dataset/                    # Benchmark Sample Files & Portable Sampling CLI
 │   ├── sample_dataset.csv
 │   └── sample.py
 │
-├── output_sample/                     # Sample Output Predictions & Feature Matrices
+├── trained_models/                    # Pre-Trained v1.7 Pure-NumPy/SciPy .npz Model Bundles
+│   ├── EnCoD_Detection/
+│   │   ├── ITC-IT-trained.npz
+│   │   └── EnCoD-trained.npz
+│   ├── BFLCp_Detection/
+│   │   ├── ITC-IT-trained.npz
+│   │   └── EnCoD-trained.npz
+│   └── Triumvir_Detection/
+│       ├── ITC-IT-trained.npz
+│       └── EnCoD-trained.npz
+│
+├── output_sample/                     # Verified Sample Output Predictions & Feature Matrices
 │   ├── AFRL_detection/
 │   │   └── AFRL_detection.csv
 │   ├── HEDGE_detection/
@@ -384,6 +380,32 @@ AFRL_Studio/
     ├── Detection_Methods.png
     └── Combine_Dataset.png
 ```
+
+---
+
+## Citation
+
+If you use **AFRL Studio** or the **AFRL Framework** in academic research, please cite:
+
+```bibtex
+@article{hosseinabadi2026afrl,
+  title   = {AFRL: A Lightweight Statistical Framework for Real-Time Detection of Encrypted File Fragments},
+  author  = {Hosseinabadi, Alireza Aliaskari and Teimouri, Mehdi},
+  journal = {SSRN Electronic Journal},
+  year    = {2026},
+  url     = {https://ssrn.com/abstract=6799741}
+}
+
+@software{hosseinabadi2026afrlstudio,
+  title   = {AFRL Studio: Open-Source Python Software Suite for Statistical Feature Extraction and Multi-Paradigm Encrypted File Fragment Detection},
+  author  = {Hosseinabadi, Alireza Aliaskari and Teimouri, Mehdi},
+  version = {1.7},
+  year    = {2026},
+  url     = {https://github.com/luciunfair/AFRL_Studio}
+}
+```
+
+Related detection benchmarks implemented or adapted in AFRL Studio: **NIST SP 800-22** (Bassham et al., 2010), **HEDGE** (Casino et al., IEEE TIFS 2019), **EnCoD** (De Gaspari et al., NCAA 2022), **DNN-BFLCp** (Skračić et al., VJCS 2023), and **Triumvir** (De Gaspari et al., arXiv:2605.31337, 2026).
 
 ---
 
