@@ -26,6 +26,7 @@
   - [Stage 2: Feature Studio (36 Suites / 359 Columns)](#stage-2-feature-studio-36-suites--359-columns)
   - [Stage 3: Detection Methods (AFRL, HEDGE, EnCoD, DNN-BFLCp & Triumvir-Style)](#stage-3-detection-methods-afrl-hedge-encod-dnn-bflcp--triumvir-style)
   - [Stage 4: CSV Dataset Combiner](#stage-4-csv-dataset-combiner)
+  - [Complete GUI Button & Control Reference](#complete-gui-button--control-reference)
 - [Sample Dataset & Full-Scale Benchmarks](#sample-dataset--full-scale-benchmarks)
 - [Running Automated Tests](#running-automated-tests)
 - [Directory Structure](#directory-structure)
@@ -291,7 +292,31 @@ Select **EnCoD**, **DNN-BFLCp**, or **Triumvir-Style**, then click **Train Model
 
 ### Stage 4: CSV Dataset Combiner
 
-Merges CSV files vertically along rows (Axis 0) or side-by-side along columns (Axis 1).
+Merges CSV files vertically along rows (Axis 0, validating matching column widths) or side-by-side along columns (Axis 1, validating matching row counts) using 10,000-row pandas chunks.
+
+---
+
+### Complete GUI Button & Control Reference
+
+Every button, radio toggle, slider, and popup control in **AFRL Studio v1.7** is documented below:
+
+| Screen / Modal | Button or Control | Exact Purpose |
+| :--- | :--- | :--- |
+| **Top Header & Footer** | **Guidance** / **About** | Opens the built-in offline workflow & preset reference (`Guidance`) or software version, University of Tehran authors, and GPL-3.0 license (`About`). |
+| **Navigation Bar** | **1. Fragment Extractor** / **2. Feature Studio** / **3. Detection Methods** / **4. Combine Datasets** | Switches cleanly between the four pipeline stages while preserving entered paths. |
+| **Status Footer** | `System Ready │ Detected N Logical CPU Cores │ Studio v1.7` | Confirms detected CPU cores, loaded detection engines, and running version. |
+| **Tab 1: Fragment Extractor** | **Extraction Strategy** radios | Chooses **Dataset-Wide Random** (`N` blocks across all files), **Per-File Uniform** (`M` blocks per file), or **Per-File Random Padding** (pads short files up to `L` bytes). |
+| **Tab 1: Fragment Extractor** | **Choose Folder** / **Fragment Size** / **Total Fragments** / **Save As CSV** / **Extract Fragments Now** | Picks raw input directory, slice width `L` (`256`–`8192+` B), sample count, and destination `uint8` CSV, then launches extraction. |
+| **Tab 2 & Feature Studio Modal** | **Open Feature Selection Studio (36 Suites)** | Launches the full 36-suite (`359`-column) feature extraction studio (optionally pre-filling Quick Launch CSV paths). |
+| **Feature Studio Modal** | **Select All** / **Clear All** & **6 Preset Buttons** (`AFRL`, `HEDGE`, `BFLCp`, `EnCoD`, `SOTA '26`, `All NIST`) | Bulk-toggles all suites or auto-selects exact literature column subsets without manual errors. |
+| **Feature Studio Modal** | **Browse CSV** / **Save As CSV** / **CPU Allocation Slider (`10%–100%`)** / **Start Feature Extraction** / **Cancel** | Chooses input fragments CSV, output features CSV, and worker core budget (`10%–100%` so desktop stays responsive), then starts or cancels extraction. |
+| **Tab 3: Detection Methods** | **5 Detection Method Radios** (`AFRL`, `HEDGE`, `EnCoD`, `DNN-BFLCp`, `Triumvir-Style`) | Selects the active detector, updates the method rule description, and reveals the **Model Setup** card for trainable classifiers. |
+| **Tab 3: Detection Methods** | **Browse Model** & **Model Status** | Loads a saved `.npz` bundle (e.g., from `trained_models/`, or `.pth` for DNN-BFLCp) and displays architecture, scaler, and saved validation accuracy. |
+| **Tab 3: Detection Methods** | **Train Model** | Opens the **Neural Training Studio** modal to train a new model on your own Unencrypted (`0`) and Encrypted (`1`) CSVs. |
+| **Tab 3: Detection Methods** | **Browse CSV** / **Save As CSV** / **CPU Slider** / **Include column header** / **Run Detection Method (`0 / 1`)** | Picks target fragment CSV, output path, CPU budget, and optional header (e.g., `AFRL_encrypted`), then runs chunked parallel classification. |
+| **Neural Training Studio Modal** | **Train CSVs (`0` & `1`)** / **Optional Test CSVs** / **Arch & Scaler Radios** / **Epochs, Batch, LR, Val Split, Patience** / **Save As `.npz`** / **Start Training** | Supplies required training CSVs and optional held-out test CSVs, configures architecture, zero-leakage scaling, and Adam early stopping, and exports a reusable `.npz` bundle. |
+| **Tab 4: Combine Datasets** | **Axis 0 / Axis 1 Radios** / **First & Second CSV** / **Merged Output** / **Input CSV files contain a header row** / **Combine CSV Datasets Now** | Chooses vertical row stacking vs. horizontal column joining, prevents duplicate header rows on Axis 0, and executes chunked `10,000`-row merging. |
+| **Live Progress Modal** | **Status** / **Progress Bar** / **Elapsed & ETR** / **Start Execution** / **Cancel** | Tracks live chunk throughput and estimated remaining time; **Cancel** safely stops background worker processes mid-run. |
 
 ---
 
